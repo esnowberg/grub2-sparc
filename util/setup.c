@@ -721,15 +721,21 @@ unable_to_embed:
   {
     char *buf, *ptr = core_img;
     size_t len = core_size;
-    grub_uint64_t blk;
+    grub_uint64_t blk, offset = 0;
     grub_partition_t container = core_dev->disk->partition;
     grub_err_t err;
 
     core_dev->disk->partition = 0;
+#ifdef GRUB_SETUP_SPARC64
+    {
+      if (grub_strstr (container->partmap->name, "gpt"))
+        offset = grub_partition_get_start (container);
+    }
+#endif
 
     buf = xmalloc (core_size);
     blk = bl.first_sector;
-    err = grub_disk_read (core_dev->disk, blk, 0, GRUB_DISK_SECTOR_SIZE, buf);
+    err = grub_disk_read (core_dev->disk, blk + offset, 0, GRUB_DISK_SECTOR_SIZE, buf);
     if (err)
       grub_util_error (_("cannot read `%s': %s"), core_dev->disk->name,
 		       grub_errmsg);
@@ -748,7 +754,7 @@ unable_to_embed:
 	if (cur > len)
 	  cur = len;
 
-	err = grub_disk_read (core_dev->disk, blk, 0, cur, buf);
+	err = grub_disk_read (core_dev->disk, blk + offset, 0, cur, buf);
 	if (err)
 	  grub_util_error (_("cannot read `%s': %s"), core_dev->disk->name,
 			   grub_errmsg);
