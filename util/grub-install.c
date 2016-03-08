@@ -1347,6 +1347,7 @@ main (int argc, char *argv[])
 	  || grub_drives[1]
 	  || (!install_drive
 	      && platform != GRUB_INSTALL_PLATFORM_POWERPC_IEEE1275)
+	  || (platform == GRUB_INSTALL_PLATFORM_SPARC64_IEEE1275)
 	  || (install_drive && !is_same_disk (grub_drives[0], install_drive))
 	  || !have_bootdev (platform))
 	{
@@ -1438,6 +1439,18 @@ main (int argc, char *argv[])
 		    g = grub_util_guess_efi_drive (*curdev);
 		    break;
 		  case GRUB_INSTALL_PLATFORM_SPARC64_IEEE1275:
+		    {
+		      char *dname;
+		      const char *ofpath = grub_util_devname_to_ofpath (*curdev);
+		      g = xasprintf ("ieee1275/%s", ofpath);
+		      dname = escape_of_path (g);
+		      fprintf (load_cfg_f, "%s ", dname);
+		      free (dname);
+		      free (g);
+		      g = NULL;
+		      break;
+		    }
+
 		  case GRUB_INSTALL_PLATFORM_POWERPC_IEEE1275:
 		  case GRUB_INSTALL_PLATFORM_I386_IEEE1275:
 		    {

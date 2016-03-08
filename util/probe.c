@@ -44,7 +44,7 @@
 /* Since OF path names can have "," characters in them, and GRUB
    internally uses "," to indicate partitions (unlike OF which uses
    ":" for this purpose) we escape such commas.  */
-static char *
+char *
 escape_of_path (const char *orig_path)
 {
   char *new_path, *d, c;

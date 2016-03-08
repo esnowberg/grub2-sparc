@@ -100,5 +100,7 @@ grub_util_guess_baremetal_drive (const char *orig_path);
 void
 grub_util_fprint_full_disk_name (FILE *f,
 				 const char *drive, grub_device_t dev);
+char *
+escape_of_path (const char *orig_path);
 
 #endif /* ! GRUB_UTIL_GETROOT_HEADER */
