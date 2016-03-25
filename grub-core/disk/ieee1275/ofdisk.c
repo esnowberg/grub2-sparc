@@ -48,6 +48,9 @@ static grub_err_t
 grub_ofdisk_get_block_size (grub_uint32_t *block_size,
                             struct ofdisk_hash_ent *op);
 
+static grub_err_t
+grub_ofdisk_open_real (grub_disk_t disk);
+
 #define OFDISK_HASH_SZ	8
 static struct ofdisk_hash_ent *ofdisk_hash[OFDISK_HASH_SZ];
 
@@ -504,16 +507,12 @@ grub_ofdisk_open (const char *name, grub_disk_t disk)
       }
     disk->id = (unsigned long) op;
     disk->data = op->open_path;
-
-    if (last_ihandle)
-      grub_ieee1275_close (last_ihandle);
-
-    last_ihandle = 0;
-    last_devpath = NULL;
-
-    grub_ieee1275_open (devpath, &last_ihandle);
-    if (! last_ihandle)
-      return grub_error (GRUB_ERR_UNKNOWN_DEVICE, "can't open device");
+    err = grub_ofdisk_open_real (disk);
+    if (err)
+      {
+        grub_free (devpath);
+        return err;
+      }
 
     err = grub_ofdisk_get_block_size (&block_size, op);
     if (err)
@@ -553,17 +552,13 @@ grub_ofdisk_prepare (grub_disk_t disk, grub_disk_addr_t sector)
 {
   grub_ssize_t status;
   unsigned long long pos;
+  grub_err_t err;
 
   if (disk->data != last_devpath)
     {
-      if (last_ihandle)
-	grub_ieee1275_close (last_ihandle);
-      last_ihandle = 0;
-      last_devpath = NULL;
-
-      grub_ieee1275_open (disk->data, &last_ihandle);
-      if (! last_ihandle)
-	return grub_error (GRUB_ERR_UNKNOWN_DEVICE, "can't open device");
+      err = grub_ofdisk_open_real (disk);
+      if (err)
+        return err;
       last_devpath = disk->data;      
     }
 
@@ -731,6 +726,22 @@ grub_ofdisk_get_block_size (grub_uint32_t *block_size, struct ofdisk_hash_ent *o
       op->block_size = args_ieee1275.size1;
       *block_size = args_ieee1275.size1;
     }
+
+  return 0;
+}
+
+static grub_err_t
+grub_ofdisk_open_real (grub_disk_t disk)
+{
+  if (last_ihandle)
+    grub_ieee1275_close (last_ihandle);
+
+  last_ihandle = 0;
+  last_devpath = NULL;
+
+  grub_ieee1275_open (disk->data, &last_ihandle);
+  if (! last_ihandle)
+    return grub_error (GRUB_ERR_UNKNOWN_DEVICE, "can't open device");
 
   return 0;
 }
