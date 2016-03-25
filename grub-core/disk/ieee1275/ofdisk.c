@@ -35,7 +35,8 @@ struct ofdisk_hash_ent
   char *grub_devpath;
   int is_boot;
   int is_removable;
-  int block_size_fails;
+  int block_size_retries;
+  grub_uint32_t block_size;
   /* Pointer to shortest available name on nodes representing canonical names,
      otherwise NULL.  */
   const char *shortest;
@@ -703,10 +704,15 @@ grub_ofdisk_get_block_size (grub_uint32_t *block_size, struct ofdisk_hash_ent *o
       grub_ieee1275_cell_t size2;
     } args_ieee1275;
 
+  if ((op->block_size_retries >= 2) || (op->block_size > 0))
+    {
+      *block_size = op->block_size;
+      return GRUB_ERR_NONE;
+    }
+
   *block_size = 0;
 
-  if (op->block_size_fails >= 2)
-    return GRUB_ERR_NONE;
+  op->block_size_retries++;
 
   INIT_IEEE1275_COMMON (&args_ieee1275.common, "call-method", 2, 2);
   args_ieee1275.method = (grub_ieee1275_cell_t) "block-size";
@@ -714,21 +720,15 @@ grub_ofdisk_get_block_size (grub_uint32_t *block_size, struct ofdisk_hash_ent *o
   args_ieee1275.result = 1;
 
   if (IEEE1275_CALL_ENTRY_FN (&args_ieee1275) == -1)
-    {
-      grub_dprintf ("disk", "can't get block size: failed call-method\n");
-      op->block_size_fails++;
-    }
+    grub_dprintf ("disk", "can't get block size: failed call-method\n");
   else if (args_ieee1275.result)
-    {
-      grub_dprintf ("disk", "can't get block size: %lld\n",
-		    (long long) args_ieee1275.result);
-      op->block_size_fails++;
-    }
+    grub_dprintf ("disk", "can't get block size: %lld\n",
+		 (long long) args_ieee1275.result);
   else if (args_ieee1275.size1
 	   && !(args_ieee1275.size1 & (args_ieee1275.size1 - 1))
 	   && args_ieee1275.size1 >= 512 && args_ieee1275.size1 <= 16384)
     {
-      op->block_size_fails = 0;
+      op->block_size = args_ieee1275.size1;
       *block_size = args_ieee1275.size1;
     }
 
