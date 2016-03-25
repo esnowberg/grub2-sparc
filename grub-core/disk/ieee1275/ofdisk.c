@@ -37,6 +37,7 @@ struct ofdisk_hash_ent
   int is_removable;
   int block_size_retries;
   grub_uint32_t block_size;
+  grub_ieee1275_ihandle_t ihandle;
   /* Pointer to shortest available name on nodes representing canonical names,
      otherwise NULL.  */
   const char *shortest;
@@ -539,7 +540,7 @@ grub_ofdisk_close (grub_disk_t disk)
 {
   if (disk->data == last_devpath)
     {
-      if (last_ihandle)
+      if (! (grub_ieee1275_test_flag(GRUB_IEEE1275_FLAG_CACHE_OPEN)) && last_ihandle)
 	grub_ieee1275_close (last_ihandle);
       last_ihandle = 0;
       last_devpath = NULL;
@@ -733,6 +734,18 @@ grub_ofdisk_get_block_size (grub_uint32_t *block_size, struct ofdisk_hash_ent *o
 static grub_err_t
 grub_ofdisk_open_real (grub_disk_t disk)
 {
+  struct ofdisk_hash_ent *op = (struct ofdisk_hash_ent *)disk->id;
+
+  if (!op)
+    return grub_error (GRUB_ERR_UNKNOWN_DEVICE, "BUG: can't open device ");
+
+  if (grub_ieee1275_test_flag(GRUB_IEEE1275_FLAG_CACHE_OPEN) && op->ihandle)
+    {
+      last_ihandle = op->ihandle;
+      last_devpath = disk->data;
+      return 0;
+    }
+
   if (last_ihandle)
     grub_ieee1275_close (last_ihandle);
 
@@ -743,5 +756,7 @@ grub_ofdisk_open_real (grub_disk_t disk)
   if (! last_ihandle)
     return grub_error (GRUB_ERR_UNKNOWN_DEVICE, "can't open device");
 
+  op->ihandle = last_ihandle;
+  last_devpath = disk->data;
   return 0;
 }
