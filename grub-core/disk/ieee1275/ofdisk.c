@@ -44,8 +44,8 @@ struct ofdisk_hash_ent
 };
 
 static grub_err_t
-grub_ofdisk_get_block_size (const char *device, grub_uint32_t *block_size,
-			    struct ofdisk_hash_ent *op);
+grub_ofdisk_get_block_size (grub_uint32_t *block_size,
+                            struct ofdisk_hash_ent *op);
 
 #define OFDISK_HASH_SZ	8
 static struct ofdisk_hash_ent *ofdisk_hash[OFDISK_HASH_SZ];
@@ -504,7 +504,17 @@ grub_ofdisk_open (const char *name, grub_disk_t disk)
     disk->id = (unsigned long) op;
     disk->data = op->open_path;
 
-    err = grub_ofdisk_get_block_size (devpath, &block_size, op);
+    if (last_ihandle)
+      grub_ieee1275_close (last_ihandle);
+
+    last_ihandle = 0;
+    last_devpath = NULL;
+
+    grub_ieee1275_open (devpath, &last_ihandle);
+    if (! last_ihandle)
+      return grub_error (GRUB_ERR_UNKNOWN_DEVICE, "can't open device");
+
+    err = grub_ofdisk_get_block_size (&block_size, op);
     if (err)
       {
         grub_free (devpath);
@@ -681,8 +691,7 @@ grub_ofdisk_init (void)
 }
 
 static grub_err_t
-grub_ofdisk_get_block_size (const char *device, grub_uint32_t *block_size,
-			    struct ofdisk_hash_ent *op)
+grub_ofdisk_get_block_size (grub_uint32_t *block_size, struct ofdisk_hash_ent *op)
 {
   struct size_args_ieee1275
     {
@@ -693,16 +702,6 @@ grub_ofdisk_get_block_size (const char *device, grub_uint32_t *block_size,
       grub_ieee1275_cell_t size1;
       grub_ieee1275_cell_t size2;
     } args_ieee1275;
-
-  if (last_ihandle)
-    grub_ieee1275_close (last_ihandle);
-
-  last_ihandle = 0;
-  last_devpath = NULL;
-
-  grub_ieee1275_open (device, &last_ihandle);
-  if (! last_ihandle)
-    return grub_error (GRUB_ERR_UNKNOWN_DEVICE, "can't open device");
 
   *block_size = 0;
 
