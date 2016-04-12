@@ -247,6 +247,8 @@ int EXPORT_FUNC(grub_ieee1275_devalias_next) (struct grub_ieee1275_devalias *ali
 void EXPORT_FUNC(grub_ieee1275_children_peer) (struct grub_ieee1275_devalias *alias);
 void EXPORT_FUNC(grub_ieee1275_children_first) (const char *devpath,
 						struct grub_ieee1275_devalias *alias);
+void *EXPORT_FUNC(grub_ieee1275_alloc_mem) (grub_size_t len);
+grub_err_t EXPORT_FUNC(grub_ieee1275_free_mem) (void * addr, grub_size_t len);
 
 #define FOR_IEEE1275_DEVALIASES(alias) for (grub_ieee1275_devalias_init_iterator (&(alias)); grub_ieee1275_devalias_next (&(alias));)
 

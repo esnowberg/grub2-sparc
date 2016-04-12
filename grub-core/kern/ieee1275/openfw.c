@@ -561,3 +561,71 @@ grub_ieee1275_canonicalise_devname (const char *path)
   return NULL;
 }
 
+/* Allocate memory with alloc-mem */
+void *
+grub_ieee1275_alloc_mem (grub_size_t len)
+{
+  struct alloc_args
+  {
+    struct grub_ieee1275_common_hdr common;
+    grub_ieee1275_cell_t method;
+    grub_ieee1275_cell_t len;
+    grub_ieee1275_cell_t catch;
+    grub_ieee1275_cell_t result;
+  }
+  args;
+
+  if (grub_ieee1275_test_flag (GRUB_IEEE1275_FLAG_CANNOT_INTERPRET))
+    {
+      grub_error (GRUB_ERR_UNKNOWN_COMMAND, N_("interpret is not supported"));
+      return NULL;
+    }
+
+  INIT_IEEE1275_COMMON (&args.common, "interpret", 2, 2);
+  args.len = len;
+  args.method = (grub_ieee1275_cell_t) "alloc-mem";
+
+  if (IEEE1275_CALL_ENTRY_FN (&args) == -1
+      || args.catch)
+    {
+      grub_error (GRUB_ERR_INVALID_COMMAND, N_("alloc-mem failed"));
+      return NULL;
+    }
+  else
+    return (void *)args.result;
+}
+
+/* Free memory allocated by alloc-mem */
+grub_err_t
+grub_ieee1275_free_mem (void *addr, grub_size_t len)
+{
+  struct free_args
+  {
+    struct grub_ieee1275_common_hdr common;
+    grub_ieee1275_cell_t method;
+    grub_ieee1275_cell_t len;
+    grub_ieee1275_cell_t addr;
+    grub_ieee1275_cell_t catch;
+  }
+  args;
+
+  if (grub_ieee1275_test_flag (GRUB_IEEE1275_FLAG_CANNOT_INTERPRET))
+    {
+      grub_error (GRUB_ERR_UNKNOWN_COMMAND, N_("interpret is not supported"));
+      return grub_errno;
+    }
+
+  INIT_IEEE1275_COMMON (&args.common, "interpret", 3, 1);
+  args.addr = (grub_ieee1275_cell_t)addr;
+  args.len = len;
+  args.method = (grub_ieee1275_cell_t) "free-mem";
+
+  if (IEEE1275_CALL_ENTRY_FN(&args) == -1
+      || args.catch)
+    {
+      grub_error (GRUB_ERR_INVALID_COMMAND, N_("free-mem failed"));
+      return grub_errno;
+    }
+
+  return GRUB_ERR_NONE;
+}
