@@ -85,24 +85,35 @@ get_card_packet (struct grub_net_card *dev)
   grub_uint64_t start_time;
   struct grub_net_buff *nb;
 
-  nb = grub_netbuff_alloc (dev->mtu + 64 + 2);
-  if (!nb)
-    return NULL;
-  /* Reserve 2 bytes so that 2 + 14/18 bytes of ethernet header is divisible
-     by 4. So that IP header is aligned on 4 bytes. */
-  grub_netbuff_reserve (nb, 2);
-
   start_time = grub_get_time_ms ();
   do
-    rc = grub_ieee1275_read (data->handle, nb->data, dev->mtu + 64, &actual);
+    rc = grub_ieee1275_read (data->handle, dev->rcvbuf, dev->rcvbufsize, &actual);
   while ((actual <= 0 || rc < 0) && (grub_get_time_ms () - start_time < 200));
-  if (actual > 0)
+
+  if (actual <= 0)
+    return NULL;
+
+  nb = grub_netbuff_alloc (actual + 2);
+  if (!nb)
+    return NULL;
+
+  /* Reserve 2 bytes so that 2 + 14/18 bytes of ethernet header is divisible
+     by 4. So that IP header is aligned on 4 bytes. */
+  if (grub_netbuff_reserve (nb, 2))
     {
-      grub_netbuff_put (nb, actual);
-      return nb;
+      grub_netbuff_free (nb);
+      return NULL;
     }
-  grub_netbuff_free (nb);
-  return NULL;
+
+  grub_memcpy (nb->data, dev->rcvbuf, actual);
+
+  if (grub_netbuff_put (nb, actual))
+    {
+      grub_netbuff_free (nb);
+      return NULL;
+    }
+
+  return nb;
 }
 
 static struct grub_net_card_driver ofdriver =
@@ -294,6 +305,24 @@ grub_ieee1275_net_config_real (const char *devpath, char **device, char **path,
   }
 }
 
+static void *
+ofnet_alloc_netbuf (grub_size_t len)
+{
+  if (grub_ieee1275_test_flag (GRUB_IEEE1275_FLAG_VIRT_TO_REAL_BROKEN))
+    return grub_ieee1275_alloc_mem (len);
+  else
+    return grub_malloc (len);
+}
+
+static void
+ofnet_free_netbuf (void *addr, grub_size_t len)
+{
+  if (grub_ieee1275_test_flag (GRUB_IEEE1275_FLAG_VIRT_TO_REAL_BROKEN))
+    grub_ieee1275_free_mem (addr, len);
+  else
+    grub_free (addr);
+}
+
 static int
 search_net_devices (struct grub_ieee1275_devalias *alias)
 {
@@ -409,41 +438,21 @@ search_net_devices (struct grub_ieee1275_devalias *alias)
   card->default_address = lla;
 
   card->txbufsize = ALIGN_UP (card->mtu, 64) + 256;
+  card->rcvbufsize = ALIGN_UP (card->mtu, 64) + 256;
 
-  if (grub_ieee1275_test_flag (GRUB_IEEE1275_FLAG_VIRT_TO_REAL_BROKEN))
-    {
-      struct alloc_args
-      {
-	struct grub_ieee1275_common_hdr common;
-	grub_ieee1275_cell_t method;
-	grub_ieee1275_cell_t len;
-	grub_ieee1275_cell_t catch;
-	grub_ieee1275_cell_t result;
-      }
-      args;
-      INIT_IEEE1275_COMMON (&args.common, "interpret", 2, 2);
-      args.len = card->txbufsize;
-      args.method = (grub_ieee1275_cell_t) "alloc-mem";
-
-      if (IEEE1275_CALL_ENTRY_FN (&args) == -1
-	  || args.catch)
-	{
-	  card->txbuf = 0;
-	  grub_error (GRUB_ERR_OUT_OF_MEMORY, N_("out of memory"));
-	}
-      else
-	card->txbuf = (void *) args.result;
-    }
-  else
-    card->txbuf = grub_zalloc (card->txbufsize);
+  card->txbuf = ofnet_alloc_netbuf (card->txbufsize);
   if (!card->txbuf)
+    goto fail;
+
+  card->rcvbuf = ofnet_alloc_netbuf (card->rcvbufsize);
+  if (!card->rcvbuf)
     {
-      grub_free (ofdata->path);
-      grub_free (ofdata);
-      grub_free (card);
-      grub_print_error ();
-      return 0;
+      grub_error_push ();
+      ofnet_free_netbuf(card->txbuf, card->txbufsize);
+      grub_error_pop ();
+      goto fail;
     }
+
   card->driver = NULL;
   card->data = ofdata;
   card->flags = 0;
@@ -455,6 +464,13 @@ search_net_devices (struct grub_ieee1275_devalias *alias)
   card->driver = &ofdriver;
   grub_net_card_register (card);
   return 0;
+
+ fail:
+  grub_free (ofdata->path);
+  grub_free (ofdata);
+  grub_free (card);
+  grub_print_error ();
+  return 1;
 }
 
 static void
