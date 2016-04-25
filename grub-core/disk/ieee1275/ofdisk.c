@@ -378,6 +378,152 @@ dev_iterate (const struct grub_ieee1275_devalias *alias)
       grub_free (table);
       grub_free (buf);
     }
+#ifdef __sparc__
+  else if (grub_strcmp (alias->type, "scsi-2") == 0)
+    {
+      grub_ieee1275_ihandle_t ihandle;
+      grub_ssize_t result;
+      char *buf, *bufptr;
+      grub_uint8_t tgt;
+
+      buf = grub_malloc (grub_strlen (alias->path) +
+                         sizeof ("/disk@00"));
+      if (!buf)
+        return;
+
+      bufptr = grub_stpcpy (buf, alias->path);
+      ihandle = ofdisk_hba_open (alias->path);
+
+      if (ihandle == 0)
+        {
+          grub_free (buf);
+          return;
+        }
+
+      for (tgt = 0; tgt <= 0xf; tgt++)
+        {
+          if (grub_ieee1275_set_address(ihandle, tgt, 0) == 0)
+            if (grub_ieee1275_no_data_command (ihandle, &ofdisk_tur,
+                                               &result) == 0)
+              if (result == 0)
+                {
+                  grub_snprintf (bufptr, sizeof ("/disk@00"),
+                                 "/disk@%" PRIxGRUB_UINT32_T, tgt);
+                  dev_iterate_real (buf, buf);
+                }
+        }
+
+      grub_free (buf);
+      return;
+    }
+  else if (grub_strcmp (alias->type, "scsi-sas") == 0)
+    {
+      grub_ieee1275_ihandle_t ihandle;
+      grub_uint32_t address_cells = 2;
+      grub_ieee1275_phandle_t root;
+      grub_ssize_t result;
+      char *buf, *bufptr;
+
+      buf = grub_malloc (grub_strlen (alias->path) +
+                         sizeof ("/disk@p1100"));
+
+      if (!buf)
+        return;
+
+      bufptr = grub_stpcpy (buf, alias->path);
+      bufptr = grub_stpcpy (bufptr, "/disk@");
+      ihandle = ofdisk_hba_open (alias->path);
+
+      if (ihandle == 0)
+        {
+          grub_free (buf);
+          return;
+        }
+
+      grub_ieee1275_finddevice (alias->path, &root);
+      grub_ieee1275_get_integer_property (root, "#address-cells", &address_cells,
+                                          sizeof address_cells, 0);
+      if (address_cells == 2)
+        {
+          grub_uint8_t tgt;
+
+          for (tgt = 0; tgt < 0xf; tgt++)
+            {
+              if (grub_ieee1275_set_address(ihandle, tgt, 0) == 0)
+                if (grub_ieee1275_no_data_command (ihandle, &ofdisk_tur,
+                                                   &result) == 0)
+                  if (result == 0)
+                    {
+                      grub_snprintf (bufptr, sizeof ("p1100"),
+                                     "%" PRIxGRUB_UINT32_T, tgt);
+                      dev_iterate_real (buf, buf);
+                    }
+            }
+        }
+      else if (address_cells == 4)
+        {
+          grub_uint16_t exp;
+          grub_uint8_t phy;
+
+          for (exp = 0; exp <= 0x100; exp+=0x100)
+            for (phy = 0; phy < 0xff; phy++)
+              {
+                grub_snprintf (bufptr, sizeof ("p1100"),
+                               "p%" PRIxGRUB_UINT32_T, exp | phy);
+                if (grub_ieee1275_set_sas_address (ihandle, bufptr, 0) == 0)
+                  if (grub_ieee1275_no_data_command (ihandle, &ofdisk_tur,
+                                                     &result) == 0)
+                    if (result == 0)
+                      dev_iterate_real (buf, buf);
+              }
+        }
+      grub_free (buf);
+      return;
+    }
+  else if (grub_strcmp (alias->type, "nvme") == 0)
+    {
+      char *buf;
+
+      buf = grub_malloc (IEEE1275_MAX_PATH_LEN);
+
+      if (!buf)
+        return;
+
+      grub_snprintf (buf, IEEE1275_MAX_PATH_LEN, "%s/disk@1", alias->path);
+      dev_iterate_real (buf, buf);
+      grub_free (buf);
+      return;
+    }
+  else if (grub_strcmp (alias->type, "scsi-usb") == 0)
+    {
+      grub_ieee1275_ihandle_t ihandle;
+      grub_ssize_t result;
+
+      ihandle = ofdisk_hba_open (alias->path);
+
+      if (ihandle == 0)
+        return;
+
+      if (grub_ieee1275_set_address (ihandle, 0, 0) == 0)
+        if (grub_ieee1275_no_data_command (ihandle, &ofdisk_tur, &result) == 0)
+          if (result == 0)
+            {
+              char *buf, *bufptr;
+
+              buf = grub_malloc (grub_strlen (alias->path) +
+                                 sizeof ("/disk@0"));
+
+              if (!buf)
+                return;
+
+              bufptr = grub_stpcpy (buf, alias->path);
+              grub_snprintf (bufptr, sizeof ("/disk@0"), "/disk@0");
+              dev_iterate_real (buf, buf);
+              grub_free (buf);
+            }
+      return;
+    }
+#endif
 
   if (!grub_ieee1275_test_flag (GRUB_IEEE1275_FLAG_NO_TREE_SCANNING_FOR_DISKS)
       && grub_strcmp (alias->type, "block") == 0)
