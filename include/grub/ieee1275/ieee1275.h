@@ -150,6 +150,8 @@ enum grub_ieee1275_flag
   GRUB_IEEE1275_FLAG_CACHE_OPEN,
 
   GRUB_IEEE1275_FLAG_VALIDATE_DEV_ALIASES,
+
+  GRUB_IEEE1275_FLAG_IGNORE_REBOOT_DEV,
 };
 
 extern int EXPORT_FUNC(grub_ieee1275_test_flag) (enum grub_ieee1275_flag flag);
