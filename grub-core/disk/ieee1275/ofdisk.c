@@ -22,8 +22,10 @@
 #include <grub/mm.h>
 #include <grub/ieee1275/ieee1275.h>
 #include <grub/ieee1275/ofdisk.h>
+#include <grub/scsicmd.h>
 #include <grub/i18n.h>
 #include <grub/time.h>
+#include <grub/list.h>
 
 static char *last_devpath;
 static grub_ieee1275_ihandle_t last_ihandle;
@@ -45,6 +47,14 @@ struct ofdisk_hash_ent
   struct ofdisk_hash_ent *next;
 };
 
+struct ofdisk_hba_ent
+{
+  struct ofdisk_hba_ent *next;
+  struct ofdisk_hba_ent **prev;
+  grub_ieee1275_ihandle_t ihandle;
+  char *path;
+};
+
 static grub_err_t
 grub_ofdisk_get_block_size (grub_uint32_t *block_size,
                             struct ofdisk_hash_ent *op);
@@ -54,6 +64,35 @@ grub_ofdisk_open_real (grub_disk_t disk);
 
 #define OFDISK_HASH_SZ	8
 static struct ofdisk_hash_ent *ofdisk_hash[OFDISK_HASH_SZ];
+
+#ifdef __sparc__
+static grub_err_t
+sparc_disk_present (const char *path);
+
+static char *
+get_hbaname_from_path (const char *path);
+
+static char *
+get_diskname_from_path (const char *path);
+
+static struct ofdisk_hba_ent *
+ofdisk_hba_find (const char *devpath);
+
+static grub_ieee1275_ihandle_t
+ofdisk_hba_open (const char *hba_name);
+
+static struct ofdisk_hba_ent *ofdisk_hba_ents = NULL;
+
+static struct grub_scsi_test_unit_ready ofdisk_tur =
+{
+  .opcode = grub_scsi_cmd_test_unit_ready,
+  .lun = 0,
+  .reserved1 = 0,
+  .reserved2 = 0,
+  .reserved3 = 0,
+  .control = 0,
+};
+#endif
 
 static int
 ofdisk_hash_fn (const char *devpath)
@@ -363,6 +402,11 @@ scan (void)
     {
       if (grub_strcmp (alias.type, "block") != 0)
 	continue;
+#ifdef __sparc__
+      if (grub_ieee1275_test_flag (GRUB_IEEE1275_FLAG_VALIDATE_DEV_ALIASES) &&
+          sparc_disk_present (alias.path) == 0)
+        continue;
+#endif
       dev_iterate_real (alias.name, alias.path);
     }
 
@@ -450,6 +494,48 @@ compute_dev_path (const char *name)
 
   return devpath;
 }
+
+#ifdef __sparc__
+static char *
+get_hbaname_from_path (const char *path)
+{
+  char *sptr, *hba_name;
+
+  hba_name = grub_strdup (path);
+
+  if (!hba_name)
+    return NULL;
+
+  sptr = grub_strstr (hba_name, "/disk@");
+
+  if (!sptr)
+    return NULL;
+
+  *sptr = '\0';
+
+  return hba_name;
+}
+
+static char *
+get_diskname_from_path (const char *path)
+{
+  const char *disk_dev = "/disk@";
+  char *sptr, *disk_name;
+
+  sptr = grub_strstr (path, disk_dev);
+
+  if (!sptr)
+    return NULL;
+
+  disk_name = grub_strdup (sptr + grub_strlen (disk_dev));
+  sptr = grub_strstr (disk_name, ":");
+
+  if (sptr)
+    *sptr = '\0';
+
+  return disk_name;
+}
+#endif
 
 static grub_err_t
 grub_ofdisk_open (const char *name, grub_disk_t disk)
@@ -760,3 +846,150 @@ grub_ofdisk_open_real (grub_disk_t disk)
   last_devpath = disk->data;
   return 0;
 }
+
+#ifdef __sparc__
+static struct ofdisk_hba_ent *
+ofdisk_hba_find (const char *devpath)
+{
+  struct ofdisk_hba_ent *dev = NULL;
+
+  FOR_LIST_ELEMENTS (dev, ofdisk_hba_ents)
+    if (grub_strcmp (dev->path, devpath) == 0)
+      break;
+
+  return dev;
+}
+
+static struct ofdisk_hba_ent *
+ofdisk_hba_add (const char *devpath, grub_ieee1275_ihandle_t ihandle)
+{
+  struct ofdisk_hba_ent *dev;
+
+  dev = grub_zalloc (sizeof (struct ofdisk_hba_ent));
+
+  if (!dev)
+    return NULL;
+
+  dev->path = grub_strdup (devpath);
+
+  if (!dev->path)
+    {
+      grub_free (dev);
+      return NULL;
+    }
+
+  dev->ihandle = ihandle;
+  grub_list_push (GRUB_AS_LIST_P (&ofdisk_hba_ents), GRUB_AS_LIST (dev));
+
+  return dev;
+}
+
+static grub_ieee1275_ihandle_t
+ofdisk_hba_open (const char *hba_name)
+{
+  grub_ieee1275_ihandle_t ihandle;
+  struct ofdisk_hba_ent *dev;
+
+  dev = ofdisk_hba_find (hba_name);
+
+  if (dev)
+    ihandle = dev->ihandle;
+  else if (grub_ieee1275_open (hba_name, &ihandle))
+    ihandle = 0;
+  else
+    {
+      dev = ofdisk_hba_add (hba_name, ihandle);
+
+      if (!dev)
+        ihandle = 0;
+    }
+
+  return ihandle;
+}
+
+static grub_err_t
+sparc_disk_present (const char *full_path)
+{
+  char *disk_name = get_diskname_from_path (full_path);
+  char *hba_name = get_hbaname_from_path (full_path);
+  char *lun_name = NULL, *sptr = NULL, *device_type = 0;
+  grub_ieee1275_ihandle_t ihandle;
+  /* Per SPARC SCSI binding spec, default to 2 for legacy devices that may
+     not have this property */
+  grub_uint32_t address_cells = 2;
+  grub_ieee1275_phandle_t root;
+  grub_uint64_t lun = 0;
+  grub_ssize_t result;
+  grub_err_t rval = GRUB_ERR_NONE;
+
+  if ((!hba_name) || (!disk_name))
+    {
+      grub_free (hba_name);
+      grub_free (disk_name);
+      return GRUB_ERR_NONE;
+    }
+
+  ihandle = ofdisk_hba_open (hba_name);
+
+  if (ihandle == 0)
+    {
+      grub_free (hba_name);
+      grub_free (disk_name);
+      return GRUB_ERR_NONE;
+    }
+
+  sptr = grub_strstr (disk_name, ",");
+
+  if (sptr)
+    {
+      lun_name = grub_strdup (sptr + 1);
+      *sptr = '\0';
+      lun = grub_strtoull (lun_name, 0, 16);
+    }
+
+  grub_ieee1275_finddevice (hba_name, &root);
+  grub_ieee1275_get_integer_property (root, "#address-cells", &address_cells,
+                                      sizeof address_cells, 0);
+  device_type = grub_ieee1275_get_device_type (hba_name);
+
+  if ((grub_strcmp (device_type, "scsi-2") == 0) ||
+      (grub_strcmp (device_type, "scsi-sas") == 0))
+    {
+      if (address_cells == 4)
+        {
+          if (grub_ieee1275_set_sas_address (ihandle, disk_name, lun) == 0)
+            if (grub_ieee1275_no_data_command (ihandle, &ofdisk_tur,
+                                               &result) == 0)
+              if (result == 0)
+                rval = GRUB_ERR_BAD_DEVICE;
+        }
+      else if ((address_cells == 2) && (grub_isxdigit (*disk_name)))
+        {
+          grub_uint32_t tgt;
+          tgt = grub_strtol (disk_name, 0, 16);
+          if (tgt <= 0xff)
+            if (grub_ieee1275_set_address (ihandle, tgt, lun) == 0)
+              if (grub_ieee1275_no_data_command (ihandle, &ofdisk_tur,
+                                                 &result) == 0)
+                if (result == 0)
+                  rval = GRUB_ERR_BAD_DEVICE;
+        }
+    }
+  else if (grub_strcmp (device_type, "scsi-usb") == 0)
+    {
+      if (grub_ieee1275_set_address (ihandle, 0, 0) == 0)
+        if (grub_ieee1275_no_data_command (ihandle, &ofdisk_tur, &result) == 0)
+          if (result == 0)
+            rval = GRUB_ERR_BAD_DEVICE;
+    }
+  else
+    {
+      /* ieee1275_finddevice would validate these already */
+      rval = GRUB_ERR_BAD_DEVICE;
+    }
+
+  grub_free (hba_name);
+  grub_free (disk_name);
+  return rval;
+}
+#endif

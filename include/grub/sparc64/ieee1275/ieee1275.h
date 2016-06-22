@@ -21,6 +21,7 @@
 #define GRUB_IEEE1275_MACHINE_HEADER	1
 
 #include <grub/types.h>
+#include <grub/ieee1275/ieee1275.h>
 
 #define GRUB_IEEE1275_CELL_SIZEOF 8
 typedef grub_uint64_t grub_ieee1275_cell_t;
@@ -42,6 +43,9 @@ extern int EXPORT_FUNC(grub_ieee1275_claim_vaddr) (grub_addr_t vaddr,
 extern int EXPORT_FUNC(grub_ieee1275_alloc_physmem) (grub_addr_t *paddr,
 						     grub_size_t size,
 						     grub_uint32_t align);
+extern int EXPORT_FUNC(grub_ieee1275_set_sas_address) (grub_uint32_t ihandle,
+                                                       const char *disk_name,
+                                                       grub_uint64_t lun);
 
 extern grub_addr_t EXPORT_VAR (grub_ieee1275_original_stack);
 
