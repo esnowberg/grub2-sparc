@@ -528,6 +528,9 @@ dev_iterate (const struct grub_ieee1275_devalias *alias)
   if (!grub_ieee1275_test_flag (GRUB_IEEE1275_FLAG_NO_TREE_SCANNING_FOR_DISKS)
       && grub_strcmp (alias->type, "block") == 0)
     {
+      if (grub_ieee1275_test_flag (GRUB_IEEE1275_FLAG_IGNORE_REBOOT_DEV)
+          && grub_strstr (alias->path, "reboot-memory"))
+        return;
       dev_iterate_real (alias->path, alias->path);
       return;
     }

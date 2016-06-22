@@ -113,6 +113,7 @@ grub_ieee1275_find_options (void)
 	{
 	  grub_ieee1275_set_flag (GRUB_IEEE1275_FLAG_CACHE_OPEN);
 	  grub_ieee1275_set_flag (GRUB_IEEE1275_FLAG_VALIDATE_DEV_ALIASES);
+	  grub_ieee1275_set_flag (GRUB_IEEE1275_FLAG_IGNORE_REBOOT_DEV);
 	}
 
       for (ptr = tmp; ptr - tmp < actual; ptr += grub_strlen (ptr) + 1)
