@@ -156,6 +156,7 @@ find_obppath (const char *sysfs_path_orig)
 #endif
 
       fd = open(path, O_RDONLY);
+#ifndef __sparc__
       if (fd < 0 || fstat (fd, &st) < 0)
 	{
 	  if (fd >= 0)
@@ -164,6 +165,7 @@ find_obppath (const char *sysfs_path_orig)
 	  fd = open(path, O_RDONLY);
 	}
 
+#endif
       if (fd < 0 || fstat (fd, &st) < 0)
 	{
 	  if (fd >= 0)
