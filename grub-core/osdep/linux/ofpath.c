@@ -50,6 +50,7 @@ struct ofpath_sparc_hba
   ofpath_sparc_addressing addressing;
 };
 
+#ifdef __sparc__
 static struct ofpath_sparc_hba sparc_lsi_hba[] = {
   /* Rhea, Jasper 320, LSI53C1020/1030 */
   {0x30, GRUB_OFPATH_SPARC_TGT_LUN},
@@ -73,6 +74,7 @@ static struct ofpath_sparc_hba sparc_lsi_hba[] = {
   {0x97, GRUB_OFPATH_SPARC_PHY_ADDR},
   {0, 0}
 };
+#endif
 
 #ifdef OFPATH_STANDALONE
 #define xmalloc malloc
@@ -414,6 +416,7 @@ vendor_is_ATA(const char *path)
   return (memcmp(bufcont, "ATA", 3) == 0);
 }
 
+#ifdef __sparc__
 static void
 check_hba_identifiers(const char *sysfs_path, int *vendor, int *device_id)
 {
@@ -492,6 +495,7 @@ check_hba_identifiers(const char *sysfs_path, int *vendor, int *device_id)
   free (path);
   free (p);
 }
+#endif
 
 static void
 check_sas (const char *sysfs_path, int *tgt, unsigned long int *sas_address)
