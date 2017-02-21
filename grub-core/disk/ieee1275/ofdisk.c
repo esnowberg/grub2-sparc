@@ -904,8 +904,27 @@ insert_bootpath (void)
 void
 grub_ofdisk_fini (void)
 {
-  if (last_ihandle)
+  if (grub_ieee1275_test_flag (GRUB_IEEE1275_FLAG_CACHE_OPEN))
+    {
+      struct ofdisk_hba_ent *dev = NULL;
+      struct ofdisk_hash_ent *ent;
+      int i;
+
+      for (i = 0; i < ARRAY_SIZE (ofdisk_hash); i++)
+        {
+          struct ofdisk_hash_ent *ent;
+
+          for (ent = ofdisk_hash[i]; ent; ent = ent->next)
+            if (ent->ihandle)
+              grub_ieee1275_close (ent->ihandle);
+        }
+
+      FOR_LIST_ELEMENTS (dev, ofdisk_hba_ents)
+        grub_ieee1275_close (dev->ihandle);
+    }
+  else if (last_ihandle)
     grub_ieee1275_close (last_ihandle);
+
   last_ihandle = 0;
   last_devpath = NULL;
 
