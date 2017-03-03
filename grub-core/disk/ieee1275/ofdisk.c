@@ -907,8 +907,7 @@ grub_ofdisk_fini (void)
   if (grub_ieee1275_test_flag (GRUB_IEEE1275_FLAG_CACHE_OPEN))
     {
       struct ofdisk_hba_ent *dev = NULL;
-      struct ofdisk_hash_ent *ent;
-      int i;
+      unsigned int i;
 
       for (i = 0; i < ARRAY_SIZE (ofdisk_hash); i++)
         {
