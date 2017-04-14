@@ -93,29 +93,13 @@ void (*grub_ieee1275_net_config) (const char *dev, char **device, char **path,
 void
 grub_machine_get_bootlocation (char **device, char **path)
 {
-  char *bootpath;
-  grub_ssize_t bootpath_size;
+  char *bootpath = NULL;
   char *filename;
   char *type;
 
-  if (grub_ieee1275_get_property_length (grub_ieee1275_chosen, "bootpath",
-					 &bootpath_size)
-      || bootpath_size <= 0)
-    {
-      /* Should never happen.  */
-      grub_printf ("/chosen/bootpath property missing!\n");
-      return;
-    }
-
-  bootpath = (char *) grub_malloc ((grub_size_t) bootpath_size + 64);
-  if (! bootpath)
-    {
-      grub_print_error ();
-      return;
-    }
-  grub_ieee1275_get_property (grub_ieee1275_chosen, "bootpath", bootpath,
-                              (grub_size_t) bootpath_size + 1, 0);
-  bootpath[bootpath_size] = '\0';
+  grub_ieee1275_get_boot_dev (&bootpath);
+  if (bootpath == NULL)
+    return;
 
   /* Transform an OF device path to a GRUB path.  */
 
