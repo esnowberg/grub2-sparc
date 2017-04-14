@@ -211,6 +211,10 @@ int EXPORT_FUNC(grub_ieee1275_set_color) (grub_ieee1275_ihandle_t ihandle,
 					  int index, int r, int g, int b);
 int EXPORT_FUNC(grub_ieee1275_milliseconds) (grub_uint32_t *msecs);
 
+int EXPORT_FUNC(grub_ieee1275_set_address) (grub_ieee1275_ihandle_t ihandle,
+                                            grub_uint32_t target,
+                                            grub_uint32_t lun);
+
 int EXPORT_FUNC(grub_ieee1275_decode_unit4) (grub_ieee1275_ihandle_t ihandle,
                                              void *addr, grub_size_t size,
                                              grub_uint32_t *phy_lo,
