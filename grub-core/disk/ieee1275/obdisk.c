@@ -991,6 +991,9 @@ grub_obdisk_open (const char *name, grub_disk_t disk)
   grub_ieee1275_ihandle_t ihandle = 0;
   struct disk_dev *dev = NULL;
 
+  if (grub_strncmp (name, "ieee1275/", sizeof ("ieee1275/") - 1) != 0)
+    return grub_error (GRUB_ERR_UNKNOWN_DEVICE, "not IEEE1275 device");
+
   dev = find_grub_devpath (name);
 
   if (dev == NULL)
