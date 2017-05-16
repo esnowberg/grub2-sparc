@@ -754,23 +754,30 @@ add_bootpath (void)
   struct disk_dev *ob_device;
   grub_err_t rval = GRUB_ERR_NONE;
   char *dev, *alias;
+  char *type;
 
   grub_ieee1275_get_boot_dev (&dev);
-  dev = strip_ob_partition (dev);
-  ob_device = add_canon_disk (dev);
+  type = grub_ieee1275_get_device_type (dev);
 
-  if (ob_device == NULL)
-    rval =  grub_error (GRUB_ERR_OUT_OF_MEMORY, "failure adding boot device");
+  if (!(type && grub_strcmp (type, "network") == 0))
+    {
+      dev = strip_ob_partition (dev);
+      ob_device = add_canon_disk (dev);
 
-  ob_device->valid = 1;
+      if (ob_device == NULL)
+        rval =  grub_error (GRUB_ERR_OUT_OF_MEMORY, "failure adding boot device");
 
-  alias = grub_ieee1275_get_devname (dev);
+      ob_device->valid = 1;
 
-  if (grub_strcmp (alias, dev) != 0)
-    ob_device->grub_alias_devpath = grub_ieee1275_encode_devname (dev);
+      alias = grub_ieee1275_get_devname (dev);
 
-  ob_device->boot_dev = 1;
+      if (grub_strcmp (alias, dev) != 0)
+        ob_device->grub_alias_devpath = grub_ieee1275_encode_devname (dev);
 
+      ob_device->boot_dev = 1;
+    }
+
+  grub_free (type);
   grub_free (dev);
   grub_free (alias);
   return rval;
