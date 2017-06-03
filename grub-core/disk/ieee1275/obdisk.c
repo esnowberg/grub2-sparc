@@ -758,6 +758,7 @@ add_bootpath (void)
 
   grub_ieee1275_get_boot_dev (&dev);
   type = grub_ieee1275_get_device_type (dev);
+  alias = NULL;
 
   if (!(type && grub_strcmp (type, "network") == 0))
     {
