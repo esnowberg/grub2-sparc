@@ -105,6 +105,8 @@ remove_escaped_commas (char *src)
 {
   char *iptr;
 
+  if (src == NULL)
+    return NULL;
   for (iptr = src; *iptr; )
     {
       if ((*iptr == '\\') && (*(iptr + 1) == ','))
@@ -757,10 +759,21 @@ add_bootpath (void)
   char *type;
 
   dev = grub_ieee1275_get_boot_dev ();
+
+  if (dev == NULL)
+    return grub_error (GRUB_ERR_OUT_OF_MEMORY, "failure adding boot device");
+
   type = grub_ieee1275_get_device_type (dev);
+
+  if (type == NULL)
+    {
+      grub_free (dev);
+      return grub_error (GRUB_ERR_OUT_OF_MEMORY, "failure adding boot device");
+    }
+
   alias = NULL;
 
-  if (!(type && grub_strcmp (type, "network") == 0))
+  if (!(grub_strcmp (type, "network") == 0))
     {
       dev = strip_ob_partition (dev);
       ob_device = add_canon_disk (dev);
@@ -772,7 +785,7 @@ add_bootpath (void)
 
       alias = grub_ieee1275_get_devname (dev);
 
-      if (grub_strcmp (alias, dev) != 0)
+      if (alias && grub_strcmp (alias, dev) != 0)
         ob_device->grub_alias_devpath = grub_ieee1275_encode_devname (dev);
 
       ob_device->boot_dev = 1;
